@@ -130,7 +130,7 @@ void display_number(int number) {
     }
     invert_matrix_180(temp);
 
-    float brightness_factor = 0.3;
+    float brightness_factor = 0.9;
 
     for (int row = 0; row < 5; row++) {
         for (int col = 0; col < 5; col++) {
