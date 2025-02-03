@@ -6,62 +6,68 @@
 #include "ws2812.pio.h"
 #include "hardware/gpio.h"
 
-#define NUM_PIXELS 25
-#define WS2812_PIN 7
-#define BUTTON_A 5
-#define BUTTON_B 6
-#define LED_R 13
-#define LED_G 12
-#define LED_B 11
+#define NUM_PIXELS 25  // Número total de LEDs na matriz 5x5
+#define WS2812_PIN 7   // Pino conectado aos LEDs WS2812
+#define BUTTON_A 5     // Pino do botão A
+#define BUTTON_B 6     // Pino do botão B
+#define LED_R 13       // Pino do LED vermelho
+#define LED_G 12       // Pino do LED verde
+#define LED_B 11       // Pino do LED azul
 
-#define IS_RGBW false
-#define STACK_SIZE 10
+#define IS_RGBW false  // Define se os LEDs WS2812 têm um canal branco (RGBW)
+#define STACK_SIZE 10  // Tamanho máximo da pilha de números
 
-PIO pio = pio0;
-uint sm = 0;
+PIO pio = pio0;  // Instância do PIO utilizada
+uint sm = 0;     // Máquina de estado para o controlador WS2812
 
-int number_stack[STACK_SIZE];
-int stack_top = -1;
+int number_stack[STACK_SIZE];  // Pilha de números para armazenar o histórico
+int stack_top = -1;  // Índice do topo da pilha
 
 uint64_t last_button_A_time = 0;  // Variável para armazenar o tempo do último pressionamento do botão A
 uint64_t last_button_B_time = 0;  // Variável para armazenar o tempo do último pressionamento do botão B
 
-bool led_red_on = false;
-int current_number = 0;
+bool led_red_on = false;  // Variável para rastrear o estado do LED vermelho
+int current_number = 0;   // Número atual exibido na matriz de LEDs
 
+// Função para adicionar um número à pilha (push)
 void push_number(int number) {
     if (stack_top < STACK_SIZE - 1) {
-        number_stack[++stack_top] = number;
+        number_stack[++stack_top] = number;  // Incrementa o topo e insere o número
     }
 }
 
+// Função para remover e retornar o último número da pilha (pop)
 int pop_number() {
     if (stack_top >= 0) {
-        return number_stack[stack_top--];
+        return number_stack[stack_top--];  // Retorna o número e decrementa o topo
     }
-    return 0;
+    return 0;  // Retorna 0 se a pilha estiver vazia
 }
 
+// Função para enviar um pixel colorido para o LED WS2812
 void set_pixel(uint index, uint32_t color) {
-    pio_sm_put_blocking(pio, sm, color << 8u);
+    pio_sm_put_blocking(pio, sm, color << 8u);  // Envia a cor para o LED WS2812
 }
 
+// Função para inverter a matriz de LEDs em 180 graus
 void invert_matrix_180(uint8_t *number) {
-    uint8_t inverted[NUM_PIXELS];
+    uint8_t inverted[NUM_PIXELS];  // Array temporário para armazenar a matriz invertida
     for (int row = 0; row < 5; row++) {
         for (int col = 0; col < 5; col++) {
+            // Inverte a posição de cada LED na matriz 5x5
             inverted[(4 - row) * 5 + col] = number[row * 5 + col];
         }
     }
+    // Atualiza a matriz original com a versão invertida
     for (int i = 0; i < NUM_PIXELS; i++) {
         number[i] = inverted[i];
     }
 }
 
+// Matriz de números de 0 a 9 em formato 5x5
 const uint8_t numbers[10][NUM_PIXELS] = {
-    // Aqui ficam as representações dos números de 0 a 9
-    // (Cada número é uma matriz 5x5 representando os LEDs acesos ou apagados)
-   // Número 0
+    // Representações dos números na matriz 5x5 (1 = LED aceso, 0 = LED apagado)
+    // Número 0
     {0, 1, 1, 1, 0,
      0, 1, 0, 1, 0,
      0, 1, 0, 1, 0,
@@ -123,32 +129,35 @@ const uint8_t numbers[10][NUM_PIXELS] = {
      0, 1, 0, 0, 0}
 };
 
+// Função para exibir um número na matriz de LEDs
 void display_number(int number) {
-    uint8_t temp[NUM_PIXELS];
+    uint8_t temp[NUM_PIXELS];  // Array temporário para armazenar o número invertido
     for (int i = 0; i < NUM_PIXELS; i++) {
-        temp[i] = numbers[number][i];
+        temp[i] = numbers[number][i];  // Copia a representação do número
     }
-    invert_matrix_180(temp);
+    invert_matrix_180(temp);  // Inverte a matriz para correspondência física dos LEDs
 
-    float brightness_factor = 0.9;
+    float brightness_factor = 0.9;  // Fator para ajustar o brilho dos LEDs
 
     for (int row = 0; row < 5; row++) {
         for (int col = 0; col < 5; col++) {
-            int index = row * 5 + col;
-            if (temp[index] == 1) {
-                uint32_t blue_color = 0x0000FF;
+            int index = row * 5 + col;  // Calcula o índice do LED na matriz
+            if (temp[index] == 1) {  // Se o LED deve estar aceso
+                uint32_t blue_color = 0x0000FF;  // Define a cor azul
                 uint8_t r = (blue_color >> 16) & 0xFF;
                 uint8_t g = (blue_color >> 8) & 0xFF;
                 uint8_t b = blue_color & 0xFF;
 
+                // Ajusta o brilho da cor
                 r = (uint8_t)(r * brightness_factor);
                 g = (uint8_t)(g * brightness_factor);
                 b = (uint8_t)(b * brightness_factor);
 
+                // Recompõe a cor ajustada e define o pixel
                 uint32_t dimmed_color = (r << 16) | (g << 8) | b;
                 set_pixel(index, dimmed_color);
             } else {
-                set_pixel(index, 0x000000);
+                set_pixel(index, 0x000000);  // Desliga o LED se o valor for 0
             }
         }
     }
